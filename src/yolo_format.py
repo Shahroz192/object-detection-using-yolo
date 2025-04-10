@@ -1,7 +1,7 @@
-import os
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
 import shutil
+from pathlib import Path
 
 def convert_box(size, box):
     """Convert VOC bbox to YOLO format (x_center, y_center, width, height)"""
@@ -32,7 +32,7 @@ def convert_annotation(xml_file, output_path, class_dict):
     height = int(size.find('height').text)
     
     # Open output file
-    out_file = open(output_path, 'w')
+    out_file = Path(output_path).open('w')
     
     for obj in root.iter('object'):
         # Get class name
@@ -70,10 +70,11 @@ def process_voc_dataset(voc_path, output_path):
     }
     
     # Create output directories
-    os.makedirs(os.path.join(output_path, 'images', 'train'), exist_ok=True)
-    os.makedirs(os.path.join(output_path, 'images', 'val'), exist_ok=True)
-    os.makedirs(os.path.join(output_path, 'labels', 'train'), exist_ok=True)
-    os.makedirs(os.path.join(output_path, 'labels', 'val'), exist_ok=True)
+    output_path = Path(output_path)
+    (output_path / 'images' / 'train').mkdir(parents=True, exist_ok=True)
+    (output_path / 'images' / 'val').mkdir(parents=True, exist_ok=True)
+    (output_path / 'labels' / 'train').mkdir(parents=True, exist_ok=True)
+    (output_path / 'labels' / 'val').mkdir(parents=True, exist_ok=True)
     
     # Get image sets
     years = ['2007', '2012']
@@ -83,42 +84,42 @@ def process_voc_dataset(voc_path, output_path):
     for year in years:
         for image_set in sets:
             # Path to image sets file (train.txt, val.txt, etc.)
-            image_set_file = os.path.join(voc_path, f'VOC{year}', 'ImageSets', 'Main', f'{image_set}.txt')
+            image_set_file = Path(voc_path) / f'VOC{year}' / 'ImageSets' / 'Main' / f'{image_set}.txt'
             
-            if not os.path.exists(image_set_file):
+            if not image_set_file.exists():
                 print(f"Warning: {image_set_file} does not exist. Skipping.")
                 continue
                 
             # Read image IDs
-            with open(image_set_file, 'r') as f:
+            with image_set_file.open('r') as f:
                 image_ids = [line.strip() for line in f.readlines()]
             
             # Process each image
             for image_id in tqdm(image_ids, desc=f"Processing {year} {image_set}"):
                 # XML annotation path
-                xml_file = os.path.join(voc_path, f'VOC{year}', 'Annotations', f'{image_id}.xml')
+                xml_file = Path(voc_path) / f'VOC{year}' / 'Annotations' / f'{image_id}.xml'
                 
                 # Image file path
-                image_file = os.path.join(voc_path, f'VOC{year}', 'JPEGImages', f'{image_id}.jpg')
+                image_file = Path(voc_path) / f'VOC{year}' / 'JPEGImages' / f'{image_id}.jpg'
                 
                 # Skip if files don't exist
-                if not os.path.exists(xml_file) or not os.path.exists(image_file):
+                if not xml_file.exists() or not image_file.exists():
                     print(f"Warning: Missing files for {image_id}. Skipping.")
                     continue
                 
                 # Output paths
                 output_dir = 'train' if image_set == 'train' else 'val'
-                txt_output_path = os.path.join(output_path, 'labels', output_dir, f'{image_id}.txt')
-                img_output_path = os.path.join(output_path, 'images', output_dir, f'{image_id}.jpg')
+                txt_output_path = output_path / 'labels' / output_dir / f'{image_id}.txt'
+                img_output_path = output_path / 'images' / output_dir / f'{image_id}.jpg'
                 
                 # Convert annotation and copy image
                 convert_annotation(xml_file, txt_output_path, voc_classes)
                 shutil.copy(image_file, img_output_path)
     
     # Create YAML file for YOLOv8
-    yaml_path = os.path.join(output_path, 'voc.yaml')
-    with open(yaml_path, 'w') as f:
-        f.write(f"path: {os.path.abspath(output_path)}  # dataset root dir\n")
+    yaml_path = 'voc.yaml'
+    with yaml_path.open('w') as f:
+        f.write(f"path: {output_path.resolve()}  # dataset root dir\n")
         f.write("train: images/train  # train images (relative to path)\n")
         f.write("val: images/val  # val images (relative to path)\n\n")
         
@@ -129,6 +130,5 @@ def process_voc_dataset(voc_path, output_path):
     
     print(f"Conversion complete. Dataset prepared at {output_path}")
     print(f"Created YAML file at {yaml_path}")
-
 
 process_voc_dataset("VOCdevkit", "voc")
